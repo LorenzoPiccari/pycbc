@@ -414,7 +414,7 @@ def lambda_from_mass_tov_file(mass, tov_file, distance=0.):
     mass_from_file = data[:, 0]
     lambda_from_file = data[:, 1]
     mass_src = mass/(1.0 + pycbc.cosmology.redshift(distance))
-    lambdav = numpy.interp(mass_src, mass_from_file, lambda_from_file)
+    lambdav = numpy.interp(mass_src, mass_from_file, lambda_from_file, left=0, right=0)
     return lambdav
 
 #

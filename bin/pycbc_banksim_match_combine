@@ -60,6 +60,12 @@ parser.add_argument("--filter-func-file", default=None,
                          "a function called filter_injections, which should "
                          "take as call profile, mass1, mass2, spin1z, spin2z, "
                          "as numpy arrays.")
+#aggiunti
+parser.add_argument("--store-lambdas", action="store_true", default=False,
+                    help="store deformability lambda in the injection parameters")
+parser.add_argument("--store-distance", action="store_true", default=False,
+                    help="store the distance in the injection parameters")
+
 options = parser.parse_args()
 
 dtypem = np.dtype([('match', np.float64), ('bank', np.unicode_, 256),
@@ -92,6 +98,11 @@ inj_params = {}
 inj_par_list = ['mass1', 'mass2', 'spin1x', 'spin1y', 'spin1z', 'spin2x',
                 'spin2y', 'spin2z', 'coa_phase', 'inclination', 'latitude',
                 'longitude', 'polarization']
+if options.store_lambdas:
+    for par in ['alpha1' ,'alpha2']:
+        inj_par_list.append(par)
+if options.store_distance:
+        inj_par_list.append('distance')
 for val in inj_par_list:
     inj_params[val] = np.zeros(len(res), dtype=np.float64)
 
