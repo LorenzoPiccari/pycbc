@@ -146,6 +146,21 @@ class BanksimTablePointInjsExecutable(wf.Executable):
                                  tags=self.tags + extra_tags)
         return node
 
+#--------------AGGIUNTO
+class WorstMatchInjsMinifollowupExecutable(wf.Executable):
+    """Class for running pycbc_worstmatch_injs_minifollowup
+    """
+    current_retention_level = wf.Executable.FINAL_RESULT
+
+    def create_node(self, analysis_time, input_file, extra_tags=None):
+        if extra_tags is None:
+            extra_tags = []
+        node = wf.Executable.create_node(self)
+        node.add_input_opt('--input-file', input_file)
+        node.new_output_file_opt(analysis_time, '.png', '--output-file',
+                                 tags=self.tags + extra_tags)
+        return node
+
 
 # Argument parsing and setup of workflow
 
@@ -306,6 +321,13 @@ plot_fitting_facs_exe = BanksimPlotFittingFactorsExecutable\
     (workflow.cp, 'banksim_plot_fitting_factors',
      out_dir=rdir['point_injection_sets'], ifos=workflow.ifos)
 
+#_______________________AGGIUNTO
+if workflow.cp.has_section('workflow-minifollowups'):
+    worst_match_followup_exe = WorstMatchInjsMinifollowupExecutable\
+        (workflow.cp, 'worstmatch_injs_minifollowup', out_dir=out_dir,
+         ifos=workflow.ifos) 
+
+
 summary_page_files = []
 # Add files to point_inj_summ_files in pairs. A tuple of one entry will span
 # the full column. A pair exists together.
@@ -375,6 +397,26 @@ for tag in sorted(output_pointinjs):
     # Other outputs could go here, before running the layout
     layout.two_column_layout(rdir['point_injection_sets/{}'.format(tag)],
                              curr_outs)
+
+#-------------------------AGGIUNTO
+if workflow.cp.has_section('workflow-minifollowups'):
+    secs = workflow.cp.get_subsections('worstmatch_injs_minifollowup')
+    for tag in sorted(output_broadinjs):
+        curr_outs = []
+        curr_file = output_broadinjs[tag]
+        worst_match_followup_exe.update_output_directory\
+            (rdir['broad_injection_sets/{}'.format(tag)])
+        for tag2 in secs:
+            worst_match_followup_exe.update_current_tags([tag,tag2])
+            curr_node = worst_match_followup_exe.create_node\
+                (workflow.analysis_time, curr_file)
+            workflow += curr_node
+            plotting_nodes.append(curr_node) 
+            curr_outs.append((curr_node.output_file,))
+        # Other outputs could go here, before running the layout
+        layout.two_column_layout(rdir['broad_injection_sets/{}'.format(tag)],
+                                 curr_outs)
+
 
 # Save config file(s) to results directory
 layout.single_layout(conf_dir, conf_file)
