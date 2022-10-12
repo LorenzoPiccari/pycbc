@@ -405,7 +405,7 @@ if workflow.cp.has_section('workflow-minifollowups'):
         curr_outs = []
         curr_file = output_broadinjs[tag]
         worst_match_followup_exe.update_output_directory\
-            (rdir['broad_injection_sets/{}'.format(tag)])
+            (rdir['broad_injection_sets/{}'.format(tag+"minifollowups")])
         for tag2 in secs:
             worst_match_followup_exe.update_current_tags([tag,tag2])
             curr_node = worst_match_followup_exe.create_node\
@@ -414,7 +414,7 @@ if workflow.cp.has_section('workflow-minifollowups'):
             plotting_nodes.append(curr_node) 
             curr_outs.append((curr_node.output_file,))
         # Other outputs could go here, before running the layout
-        layout.two_column_layout(rdir['broad_injection_sets/{}'.format(tag)],
+        layout.two_column_layout(rdir['broad_injection_sets/{}'.format(tag+"minifollowups")],
                                  curr_outs)
 
 
