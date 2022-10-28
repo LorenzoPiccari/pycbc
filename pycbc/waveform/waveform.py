@@ -104,9 +104,9 @@ def _check_lal_pars(p):
     if p['lambda2'] is not None:
         lalsimulation.SimInspiralWaveformParamsInsertTidalLambda2(lal_pars, p['lambda2'])
     if p['alpha1'] is not None and p['alpha1'] != 0:
-        lalsimulation.SimInspiralWaveformParamsInsertTidalLambda1(lal_pars, p['alpha1'])
+        lalsimulation.SimInspiralWaveformParamsInsertTidalLambda1(lal_pars, float(p['alpha1']))
     if p['alpha2'] is not None and p['alpha2'] != 0:
-        lalsimulation.SimInspiralWaveformParamsInsertTidalLambda2(lal_pars, p['alpha2'])
+        lalsimulation.SimInspiralWaveformParamsInsertTidalLambda2(lal_pars, float(p['alpha2']))
     if p['lambda_octu1'] is not None:
         lalsimulation.SimInspiralWaveformParamsInsertTidalOctupolarLambda1(lal_pars, p['lambda_octu1'])
     if p['lambda_octu2'] is not None:
