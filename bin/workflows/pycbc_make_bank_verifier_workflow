@@ -37,6 +37,8 @@ from pycbc.workflow.jobsetup import (select_generic_executable,
                                      PycbcCreateInjectionsExecutable,
                                      LalappsInspinjExecutable)
 from pycbc.workflow import setup_splittable_dax_generated
+from pycbc.workflow.pegasus_workflow import SubWorkflow
+from pycbc.workflow.core import resolve_url_to_file
 
 # Boiler-plate stuff
 __author__  = "Ian Harry <ian.harry@ligo.org>"
@@ -152,14 +154,72 @@ class WorstMatchInjsMinifollowupExecutable(wf.Executable):
     """
     current_retention_level = wf.Executable.FINAL_RESULT
 
-    def create_node(self, analysis_time, input_file, extra_tags=None):
-        if extra_tags is None:
-            extra_tags = []
+    def create_node(self, analysis_time, input_file):
         node = wf.Executable.create_node(self)
-        node.add_input_opt('--input-file', input_file)
-        node.new_output_file_opt(analysis_time, '.png', '--output-file',
-                                 tags=self.tags + extra_tags)
+        node.add_input_opt('--match-file', input_file)
         return node
+
+#-------------AGGIUNTO
+def setup_WorstMatchInjs_minifollowups(workflow, match_file,
+                                            dax_output, out_dir,
+                                            tags=None):
+    """Generate a subworkflow for the minifollowups of the injections with the worst match
+       Parameters
+    ----------
+    workflow: pycbc.workflow.Workflow
+        The core workflow instance we are populating
+
+    followups_file: pycbc.workflow.File
+        The File class holding the triggers/injections.
+
+    dax_output: The directory that will contain the dax file.
+
+    out_dir: path
+        The directory to store minifollowups result plots and files
+
+    tags: {None, optional}
+        Tags to add to the minifollowups executables
+    """
+    
+    #Create the directory that will contain the dax file 
+    wf.makedir(dax_output)
+
+    # Create the node
+    exe = WorstMatchInjsMinifollowupExecutable\
+          (workflow.cp, 'worstmatch_injs_minifollowup', out_dir=out_dir,
+          ifos=workflow.ifos)
+
+    node = exe.create_node\
+                (workflow.analysis_time, match_file)
+    
+    #Turn the config file into a File instance
+    config_path = os.path.abspath(dax_output + '/' + \
+                                  ''.join(tags) + '_minifollowup.ini')
+    workflow.cp.write(open(config_path, 'w'))
+    config_file = resolve_url_to_file(config_path)
+
+    #add necessary options
+    node.add_opt('--workflow-name', 'minifollowups')
+    node.add_input_opt('--config-files', config_file)
+    if tags:
+        node.add_list_opt('--tags', tags)
+    node.new_output_file_opt(workflow.analysis_time, '.dax', '--dax-file')
+    node.new_output_file_opt(workflow.analysis_time, '.dax.map',
+                             '--output-map')
+    
+    dax_file = node.output_files[0]
+    assert(dax_file.name.endswith('.dax'))
+    map_file = node.output_files[1]
+    assert(map_file.name.endswith('.map'))
+
+    workflow += node
+
+    # Execute this in a sub-workflow
+    job = SubWorkflow(dax_file.name, is_planned=False)
+    job.set_subworkflow_properties(map_file,
+                                   staging_site=workflow.staging_site,
+                                   cache_file=workflow.cache_file)
+    job.add_into_workflow(workflow)
 
 
 # Argument parsing and setup of workflow
@@ -321,12 +381,6 @@ plot_fitting_facs_exe = BanksimPlotFittingFactorsExecutable\
     (workflow.cp, 'banksim_plot_fitting_factors',
      out_dir=rdir['point_injection_sets'], ifos=workflow.ifos)
 
-#_______________________AGGIUNTO
-if workflow.cp.has_section('workflow-minifollowups'):
-    worst_match_followup_exe = WorstMatchInjsMinifollowupExecutable\
-        (workflow.cp, 'worstmatch_injs_minifollowup', out_dir=out_dir,
-         ifos=workflow.ifos) 
-
 
 summary_page_files = []
 # Add files to point_inj_summ_files in pairs. A tuple of one entry will span
@@ -400,24 +454,12 @@ for tag in sorted(output_pointinjs):
 
 #-------------------------AGGIUNTO
 if workflow.cp.has_section('workflow-minifollowups'):
-    secs = workflow.cp.get_subsections('worstmatch_injs_minifollowup')
     for tag in sorted(output_broadinjs):
-        curr_outs = []
         curr_file = output_broadinjs[tag]
-        worst_match_followup_exe.update_output_directory\
-            (rdir['broad_injection_sets/{}'.format(tag+"minifollowups")])
-        for tag2 in secs:
-            worst_match_followup_exe.update_current_tags([tag,tag2])
-            curr_node = worst_match_followup_exe.create_node\
-                (workflow.analysis_time, curr_file)
-            workflow += curr_node
-            plotting_nodes.append(curr_node) 
-            curr_outs.append((curr_node.output_file,))
-        # Other outputs could go here, before running the layout
-        layout.two_column_layout(rdir['broad_injection_sets/{}'.format(tag+"minifollowups")],
-                                 curr_outs)
+        out_dir = rdir['broad_injection_sets/{}'.format(tag+"minifollowups")]
+        setup_WorstMatchInjs_minifollowups(workflow, curr_file, 'daxes', out_dir, tags=tag)
 
-
+ 
 # Save config file(s) to results directory
 layout.single_layout(conf_dir, conf_file)
 
