@@ -39,6 +39,12 @@ parser = argparse.ArgumentParser(usage='',
 parser.add_argument("--version", action="version", version=__version__)
 parser.add_argument('--input-file', default=None, required=True,
                     help="List of input files.")
+
+parser.add_argument('--mass-filter', default=None,
+                    help="mass filter.")
+parser.add_argument('--vmin', default=None,
+                    help="minimum of the color map")
+
 parser.add_argument('--output-file', default=None, required=True,
                     help="Output file.")
 parser.add_argument('--filter-injections', action='store_true', default=False,
@@ -85,6 +91,20 @@ eta = m1*m2 / (mtot*mtot)
 effspin = (s1z*m1 + s2z*m2) / mtot
 curr_fp.close()
 
+if opt.mass_filter:
+    mtot = numpy.ma.masked_greater(mtot, float(opt.mass_filter))
+    m1 = numpy.ma.array(m1, mask = mtot.mask)
+    m2 = numpy.ma.array(m2, mask = mtot.mask)
+    eta = numpy.ma.array(eta, mask = mtot.mask)
+    effspin = numpy.ma.array(effspin, mask = mtot.mask)
+    s1z = numpy.ma.array(s1z, mask = mtot.mask)
+    s2z = numpy.ma.array(s2z, mask = mtot.mask)
+    match = numpy.ma.array(match, mask = mtot.mask)
+    distance = numpy.ma.array(distance, mask = mtot.mask)
+    lambda1 = numpy.ma.array(lambda1, mask = mtot.mask)
+    lambda2 = numpy.ma.array(lambda2, mask = mtot.mask)
+    #minim = numpy.argmin(match)
+    #print(m1[minim], m2[minim], match[minim], lambda1[minim], lambda2[minim])
 
 cmap = plt.get_cmap('magma')
 
@@ -108,6 +128,10 @@ plt.rcParams['xtick.major.pad'] = '1'
 plt.rcParams['ytick.major.pad'] = '1'
 
 Nrows=2
+vmin=None
+
+if opt.vmin is not None:
+    vmin = 0.77
 
 if lambda1 is not None and lambda2 is not None:
     Nrows = 4
@@ -119,7 +143,7 @@ fig.subplots_adjust(left=0.1, bottom=0.1, right=0.8, top=0.96, wspace=0.3,
 
 cax = axarr[0, 0]
 cax.autoscale_view('tight')
-cax.scatter(s1z, s2z, c=match, zorder=10, s=pointsize, linewidth=0, cmap=cmap)
+cax.scatter(s1z, s2z, c=match, zorder=10, s=pointsize, linewidth=0, cmap=cmap, vmin=vmin)
 cax.set_xlabel('Injected spin1')
 cax.set_ylabel('Injected spin2')
 #adjust_axes(cax)
@@ -127,7 +151,7 @@ cax.set_ylabel('Injected spin2')
 cax = axarr[0, 1]
 cax.autoscale_view('tight')
 cax.scatter(eta, effspin, c=match, zorder=10, s=pointsize, linewidth=0,
-            cmap=cmap)
+            cmap=cmap, vmin=vmin)
 cax.set_xlabel('Injected eta')
 cax.set_ylabel('Injected effective spin')
 #adjust_axes(cax)
@@ -135,21 +159,24 @@ cax.set_ylabel('Injected effective spin')
 cax = axarr[0, 2]
 cax.autoscale_view('tight')
 image = cax.scatter(mtot, effspin, c=match, zorder=10, s=pointsize,
-                    linewidth=0, cmap=cmap)
+                    linewidth=0, cmap=cmap, vmin=vmin)
 cax.set_xlabel('Injected total mass')
 cax.set_ylabel('Injected effective spin')
 adjust_axes(cax)
 
 cax = axarr[1, 0]
 cax.autoscale_view('tight')
-cax.scatter(m1, m2, c=match, zorder=10, s=pointsize, linewidth=0, cmap=cmap)
+cax.scatter(m1, m2, c=match, zorder=10, s=pointsize, linewidth=0, cmap=cmap, vmin=vmin)
 cax.set_xlabel('Injected mass1')
 cax.set_ylabel('Injected mass2')
 adjust_axes(cax)
 
 cax = axarr[Nrows-1, 1]
 cax.autoscale_view('tight')
-hist, bins = numpy.histogram(match, bins=50)
+if opt.mass_filter is not None:
+    hist, bins = numpy.histogram(match.compressed(), bins=50)
+else:
+    hist, bins = numpy.histogram(match, bins=50)
 width = 1.0 * (bins[1] - bins[0])
 center = (bins[:-1] + bins[1:]) / 2
 cax.bar(center, hist, align='center', width=width, edgecolor="none")
@@ -180,7 +207,7 @@ if lambda1 is not None and lambda2 is not None:
     cax = axarr[1, 1]
     cax.autoscale_view('tight')
     image = cax.scatter(s1z, lambdacomb, c=match, zorder=10, s=pointsize,
-                        linewidth=0, cmap=cmap)
+                        linewidth=0, cmap=cmap, vmin=vmin)
     cax.set_xlabel('Injected spin 1')
     cax.set_ylabel('Combined tidal def.')
     adjust_axes(cax)
@@ -188,7 +215,7 @@ if lambda1 is not None and lambda2 is not None:
     cax = axarr[1, 2]
     cax.autoscale_view('tight')
     image = cax.scatter(s2z, lambdacomb, c=match, zorder=10, s=pointsize,
-                        linewidth=0, cmap=cmap)
+                        linewidth=0, cmap=cmap, vmin=vmin)
     cax.set_xlabel('Injected spin 2')
     cax.set_ylabel('Combined tidal def.')
     adjust_axes(cax)
@@ -196,7 +223,7 @@ if lambda1 is not None and lambda2 is not None:
     cax = axarr[2, 0]
     cax.autoscale_view('tight')
     image = cax.scatter(lambda1, lambda2, c=match, zorder=10, s=pointsize,
-                        linewidth=0, cmap=cmap)
+                        linewidth=0, cmap=cmap, vmin=vmin)
     cax.set_ylabel('Tidal def.\n lambda 1')
     cax.set_ylabel('Tidal def.\n lambda 2')
     adjust_axes(cax)
@@ -204,7 +231,7 @@ if lambda1 is not None and lambda2 is not None:
     cax = axarr[2, 1]
     cax.autoscale_view('tight')
     image = cax.scatter(mtot, lambdacomb, c=match, zorder=10, s=pointsize,
-                        linewidth=0, cmap=cmap)
+                        linewidth=0, cmap=cmap, vmin=vmin)
     cax.set_xlabel('Injected total mass')
     cax.set_ylabel('Combined tidal def.')
     adjust_axes(cax)
@@ -212,7 +239,7 @@ if lambda1 is not None and lambda2 is not None:
     cax = axarr[2, 2]
     cax.autoscale_view('tight')
     image = cax.scatter(eta, lambdacomb, c=match, zorder=10, s=pointsize,
-                        linewidth=0, cmap=cmap)
+                        linewidth=0, cmap=cmap, vmin=vmin)
     cax.set_xlabel('Injected eta')
     cax.set_ylabel('Combined tidal def.')
     adjust_axes(cax)
@@ -220,7 +247,7 @@ if lambda1 is not None and lambda2 is not None:
     cax = axarr[3, 0]
     cax.autoscale_view('tight')
     image = cax.scatter(mtot, distance, c=match, zorder=10, s=pointsize,
-                        linewidth=0, cmap=cmap)
+                        linewidth=0, cmap=cmap, vmin=vmin)
     cax.set_xlabel('Injected total mass')
     cax.set_ylabel('distance')
     adjust_axes(cax)
