@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+
+"""
+Script to produce an analysis of the injections with worst match in a bank verificator
+"""
+
+# =============================================================================
+#PREAMBLE
+# =============================================================================
+import sys
+import os
+import argparse
+import h5py
+import numpy as np
+import pycbc.workflow as wf
+from pycbc.results import layout
+from pycbc.workflow.plotting import PlotExecutable
+
+# =============================================================================
+# Functions
+# =============================================================================
+def make_match_times_x_plot(workflow, match, out_dir, ifos=None, tags=None):
+    """Adds a node for plotting y = match * x for a given injection"""
+    
+    tags = [] if tags is None else tags
+    
+    #if ifos is not None:
+       #extra_tags += [ifos]
+
+    #node = PlotExecutable(workflow.cp, 'pycbc_make_linear_match_plot',
+    #                      ifos=workflow.ifos, out_dir=out_dir,
+    #                      tags=tags+extra_tags).create_node()
+
+    node = PlotExecutable(workflow.cp, 'pycbc_make_linear_match_plot',
+                          ifos=workflow.ifos, out_dir=out_dir,
+                          tags=tags).create_node()
+     
+    #add match as input option
+    node.add_opt("--match", match)
+
+    #setting up the output file
+    # node.new_output_file_opt(workflow.analysis_time, '.png',
+    #                         '--output-file', tags=extra_tags)
+
+    node.new_output_file_opt(workflow.analysis_time, '.png',
+                             '--output-file', tags=tags)
+
+    #adding node to the workflow
+    workflow += node
+ 
+    return node.output_files
+
+
+# =============================================================================
+# Main script starts here
+# =============================================================================
+parser = argparse.ArgumentParser(description=__doc__[1:])
+parser.add_argument("-v", "--verbose", default=False, action="store_true",
+                    help="Verbose output")
+parser.add_argument('--match-file',
+                    help="h5 file containing the values of the parameters of each injection")
+#parser.add_argument("--ifos",                    
+#                    help="IFOS use in the analysis")
+wf.add_workflow_command_line_group(parser)
+wf.add_workflow_settings_cli(parser, include_subdax_opts=True)
+args = parser.parse_args()
+
+#Create the workflow
+workflow = wf.Workflow(args)
+
+wf.makedir(args.output_dir)
+
+# Create a FileList that will contain all output files
+layouts = []
+
+#Reading the match file 
+match_file = h5py.File(args.match_file, "r")
+match = np.array(match_file['trig_params/match'][:])
+
+#Determining which injection have to be followed up
+N_flw = int(workflow.cp.get_opt_tags('workflow-minifollowups',
+                                          'num-followups', ''))
+match_min_where = np.argpartition(match, N_flw)[:N_flw]
+match_min = match[match_min_where]
+
+#Loop over injections to be followed up
+for i in range(match_min.size):
+    files = wf.FileList([])
+    files += make_match_times_x_plot(workflow, match_min[i], args.output_dir, ifos=workflow.ifos, tags=args.tags + ['_' + str(i)]) 
+        
+    layouts += list(layout.grouper(files, 2))
+    
+workflow.save()
+layout.two_column_layout(args.output_dir, layouts)

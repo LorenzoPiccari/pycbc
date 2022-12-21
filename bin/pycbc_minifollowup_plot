@@ -1,0 +1,68 @@
+#! /usr/bin/env python
+
+"""
+Script to make followups of the injections with the worst match in a bank verificator
+"""
+#=========================================================================
+#PREAMBLE
+#=========================================================================
+import sys
+import os
+import argparse
+import h5py
+import numpy as np
+import matplotlib.pyplot as plt
+from pycbc import results
+
+
+#=========================================================================
+#FUNCTIONS
+#=========================================================================
+def line_equation(x, m):
+    return m*x
+
+#=========================================================================
+#MAIN SCRIPTS
+#=========================================================================
+#options
+parser = argparse.ArgumentParser(description=__doc__[1:])
+parser.add_argument("--match", default=None, required=True,
+                    help="Value of the match relative to the injection that has to be followed up")
+parser.add_argument("--output-file", default=None, required=True,
+                    help="output file")
+
+#plotting options
+parser.add_argument("--plot-title", help="If given use this as the plot title")
+parser.add_argument("--plot-caption", help="If given, use this as the plot caption")
+
+args = parser.parse_args()
+
+# Set output directory
+outdir = os.path.split(os.path.abspath(args.output_file))[0]
+if not os.path.isdir(outdir):
+    os.makedirs(outdir)
+
+#Plotting
+x = np.linspace(0, 100, num=100)
+match = float(args.match)
+
+fig = plt.figure(figsize=(20,20))
+ax = plt.subplot(111,aspect = 'equal')
+
+plt.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0, hspace=0)
+
+ax.scatter(x, line_equation(x, match), c='blue', marker='.')
+ax.set_xlabel("x label")
+ax.set_ylabel("match * x")
+
+if args.plot_title is None:
+    args.plot_title = "Injection with match = {}".format(args.match)
+
+if args.plot_caption is None:
+    args.plot_caption = "Linear plot: y = match * x"
+
+fig_kwds = {}
+if '.png' in args.output_file:
+    fig_kwds['dpi'] = 200
+
+results.save_fig_with_metadata(fig, args.output_file, fig_kwds=fig_kwds, title=args.plot_title, caption=args.plot_caption)

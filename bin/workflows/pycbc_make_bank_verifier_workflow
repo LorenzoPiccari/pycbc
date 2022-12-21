@@ -180,29 +180,31 @@ def setup_WorstMatchInjs_minifollowups(workflow, match_file,
     tags: {None, optional}
         Tags to add to the minifollowups executables
     """
-    
-    #Create the directory that will contain the dax file 
+    tag = []
+    if tags is not None:
+        tag.append(tags)
+
+    #Create the directory that will contain the dax file
     wf.makedir(dax_output)
 
     # Create the node
     exe = WorstMatchInjsMinifollowupExecutable\
-          (workflow.cp, 'worstmatch_injs_minifollowup', out_dir=out_dir,
-          ifos=workflow.ifos)
+          (workflow.cp, 'worstmatch_injs_minifollowup', out_dir=dax_output,
+          ifos=workflow.ifos, tags=tag)
 
     node = exe.create_node\
                 (workflow.analysis_time, match_file)
     
     #Turn the config file into a File instance
     config_path = os.path.abspath(dax_output + '/' + \
-                                  ''.join(tags) + '_minifollowup.ini')
+                                  ''.join(tag) + '_minifollowup.ini')
     workflow.cp.write(open(config_path, 'w'))
     config_file = resolve_url_to_file(config_path)
 
     #add necessary options
-    node.add_opt('--workflow-name', 'minifollowups')
     node.add_input_opt('--config-files', config_file)
-    if tags:
-        node.add_list_opt('--tags', tags)
+    if tag:
+        node.add_list_opt('--tags', tag)
     node.new_output_file_opt(workflow.analysis_time, '.dax', '--dax-file')
     node.new_output_file_opt(workflow.analysis_time, '.dax.map',
                              '--output-map')
@@ -211,6 +213,9 @@ def setup_WorstMatchInjs_minifollowups(workflow, match_file,
     assert(dax_file.name.endswith('.dax'))
     map_file = node.output_files[1]
     assert(map_file.name.endswith('.map'))
+
+    node.add_opt('--workflow-name', dax_file.name)
+    node.add_opt('--output-dir', out_dir)
 
     workflow += node
 
@@ -456,8 +461,8 @@ for tag in sorted(output_pointinjs):
 if workflow.cp.has_section('workflow-minifollowups'):
     for tag in sorted(output_broadinjs):
         curr_file = output_broadinjs[tag]
-        out_dir = rdir['broad_injection_sets/{}'.format(tag+"minifollowups")]
-        setup_WorstMatchInjs_minifollowups(workflow, curr_file, 'daxes', out_dir, tags=tag)
+        out_dir = rdir['broad_injection_sets/{}'.format(tag+"_minifollowups")]
+        setup_WorstMatchInjs_minifollowups(workflow, curr_file, tag+'_dax_output', out_dir, tags=tag)
 
  
 # Save config file(s) to results directory
