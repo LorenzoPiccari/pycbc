@@ -40,16 +40,21 @@ parser.add_argument('--max-q', type=float)
 parser.add_argument('--tau0-crawl', type=float)
 parser.add_argument('--tau0-start', type=float)
 parser.add_argument('--tau0-end', type=float)
+parser.add_argument('--eos-file', default=None,
+    help='Mass-lambda file for a given NS equation of state. IF GIVEN lambda1 and lambda2 are not to be insert in params')
 pycbc.psd.insert_psd_option_group(parser)
 args = parser.parse_args()
 pycbc.init_logging(args.verbose)
 numpy.random.seed(args.seed)
 
-
 fdict = {}
 if args.fixed_params:
     for p, v in zip(args.fixed_params, args.fixed_values):
         fdict[p] = v
+
+#Consistency check
+if all([args.eos_file is not None, 'lambda1' in args.params, 'lambda2' in args.params]):
+    raise Error('If eos-file is given, lambda1 and lambda2 are authomatically in params, you dont need to include them by hand')
 
 class Shrinker(object):
     def __init__(self, data):
@@ -280,6 +285,13 @@ def draw(rtype):
     if rtype == 'uniform':
         for name, pmin, pmax in zip(args.params, args.min, args.max):
             params[name] = numpy.random.uniform(pmin, pmax, size=size)
+        if args.eos_file is not None:
+            from pycbc.conversions import lambda_from_mass_tov_file
+            lambda1_max = lambda_from_mass_tov_file(params['mass1'], args.eos_file)
+            lambda2_max = lambda_from_mass_tov_file(params['mass2'], args.eos_file)
+            params['lambda1'] = numpy.random.uniform(0., lambda1_max, size=size)
+            params['lambda2'] = numpy.random.uniform(0., lambda2_max, size=size)
+
     elif rtype == 'kde':
         trail = 300
         if trail > len(bank):
