@@ -27,6 +27,7 @@ how a simple workflow is constructed with pycbc.workflow.
 import os
 import argparse
 import pycbc
+import numpy
 import pycbc.version
 import pycbc.workflow as wf
 import pycbc.workflow.pegasus_workflow as pwf
@@ -48,7 +49,8 @@ class SbankExecutable(wf.Executable):
     # This tells us that reference-psd is a file option
     file_input_options = wf.Executable.file_input_options + ['--reference-psd']
 
-    sbank_job_seed = 0
+    sbank_job_seed = numpy.random.randint(1000)
+    #sbank_job_seed = 0
 
     def create_node(self, analysis_time, seed_bank=None, trial_bank=None,
                      mchirp_boundaries_file=None, mchirp_boundary_idx=None,
