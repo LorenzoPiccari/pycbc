@@ -384,12 +384,16 @@ with ctx:
                 #        have this entirely controlled by the template bank.
                 #        However, while we are still using the high-mass divide
                 #        in XML banks, this must be retained.
-                try:
-                    this_approximant = template_params['approximant']
-                except:
-                    this_approximant = options.template_approximant
-                    if options.total_mass_divide is not None and (template_params.mass1+template_params.mass2) >= options.total_mass_divide:
-                        this_approximant = options.highmass_approximant
+
+                #try:
+                #    this_approximant = template_params.approximant
+                #except:
+                #    this_approximant = options.template_approximant
+                #    if options.total_mass_divide is not None and (template_params.mass1+template_params.mass2) >= options.total_mass_divide:
+                #        this_approximant = options.highmass_approximant
+                this_aproximant = this_approximant = options.template_approximant
+                if options.total_mass_divide is not None and (template_params.mass1+template_params.mass2) >= options.total_mass_divide:
+                    this_approximant = options.highmass_approximant
 
                 htilde = get_waveform(this_approximant,
                                       options.template_phase_order,
