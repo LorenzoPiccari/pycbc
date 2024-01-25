@@ -35,3 +35,41 @@ __author__  = "Lorenzo Piccari <lorenzo.@ligo.org>"
 __version__ = pycbc.version.git_verbose_msg
 __date__    = pycbc.version.date
 __program__ = "pycbc_make_uberbank_workflow"
+
+##################################
+# DEFINE CLASSES FOR EXECUTABLES
+##################################
+
+class BruteBankExecutable(wf.Executable):
+    """ Class for running pycbc_brute_bank.
+    """
+    # This outputs a dax file.
+    current_retention_level = wf.Executable.FINAL_RESULT
+
+    def create_node(self, analysis_time, bank_out_file, config_file,
+                    out_storage_path, pegasus_base_dir,
+                    workflow_name='brute_bank'):
+        node = wf.Executable.create_node(self)
+
+        node.add_opt('--output-file', bank_out_file.storage_path)
+
+        node.add_input_opt('--supplement-config-file', config_file)
+
+        node.add_opt('--workflow-name', workflow_name)
+        node.add_opt('--storage-path-base', out_storage_path)
+
+        # Intermediate outputs and dax files
+        node.new_output_file_opt(analysis_time, '.hdf',
+                                 '--intermediate-data-file',
+                                 tags=self.tags + ['INTERMEDIATE'])
+        node.new_output_file_opt(analysis_time, '.xml',
+                                 '--metadata-file',
+                                 tags=self.tags + ['METADATA'])
+        node.new_output_file_opt(analysis_time, '.dax',
+                                 '--dax-file',
+                                 tags=self.tags + ['DAX'])
+        node.new_output_file_opt(analysis_time, '.map',
+                                 '--output-map',
+                                 tags=self.tags + ['MAP'])
+        return node
+
