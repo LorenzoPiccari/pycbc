@@ -32,6 +32,7 @@ import copy
 import logging
 from abc import ABCMeta, abstractmethod
 import h5py
+from pycbc.transforms import DistanceToRedshift
 from pycbc import waveform, frame, libutils
 from pycbc.opt import LimitedSizeDict
 from pycbc.waveform import (get_td_waveform, fd_det,
@@ -59,6 +60,8 @@ sim_inspiral_map = {
     'ra': 'longitude',
     'dec': 'latitude',
     'approximant': 'waveform',
+    'lambda1': 'alpha1',
+    'lambda2': 'alpha2'
     }
 
 def set_sim_data(inj, field, data):
@@ -74,6 +77,12 @@ def set_sim_data(inj, field, data):
     # for spin1 and spin2 we need data to be an array
     if sim_field in ['spin1', 'spin2']:
         setattr(inj, sim_field, [0, 0, data])
+    #if the source mass is given than we want to multiply it by 1+z to store the detector mass 
+    if sim_field in ['mass1_src', 'mass2_src']
+        d = inj.distance
+        z = DistanceToRedshift().transform({'distance' : d})
+        z = z['redshift']
+        setattr(inj, sim_field[:-4], data*(1+z))
     else:
         setattr(inj, sim_field, data)
 
@@ -316,6 +325,13 @@ class _XMLInjectionSet(object):
             static_args = {}
         if write_params is None:
             write_params = samples.fieldnames
+        # If the source mass is given we want to store also the distance
+        if 'mass1_src' in write_params or 'mass2_src' in write_params:
+            if 'distance' not in write_params:
+                raise ValueError('distance required when using source masses')
+            elif 'distance' != write_params[0]:
+                write_params.remove('distance')
+                write_params = ['distance'] + write_params
         for ii in range(samples.size):
             sim = lsctables.SimInspiral()
             # initialize all elements to None
