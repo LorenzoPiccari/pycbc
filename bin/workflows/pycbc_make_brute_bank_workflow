@@ -17,8 +17,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 """
-Workflow generator for a stochastic template bank construction with pycbc_brute_bank. 
-...
+Workflow generator for a stochastic template bank construction with pycbc_brute_bank.
 """
 
 #imports
@@ -34,10 +33,10 @@ from pycbc.workflow.pegasus_workflow import SubWorkflow
 __author__  = "Lorenzo Piccari <lorenzo.@ligo.org>"
 __version__ = pycbc.version.git_verbose_msg
 __date__    = pycbc.version.date
-__program__ = "pycbc_make_uberbank_workflow"
+__program__ = "pycbc_make_brute_bank_workflow"
 
 ##################################
-# DEFINE CLASSES FOR EXECUTABLES #
+# DEFINE CLASSES AND FUNCTIONS   #
 ##################################
 
 class BruteBankExecutable(wf.Executable):
@@ -45,33 +44,42 @@ class BruteBankExecutable(wf.Executable):
     """
     # This outputs a dax file.
     current_retention_level = wf.Executable.FINAL_RESULT
+   
+    # This tells us that --input-file is a file option NOT SURE WHAT THIS IS 
+    file_input_options = wf.Executable.file_input_options + ['--input-file']
 
-    def create_node(self, analysis_time, bank_out_file, config_file,
-                    out_storage_path, pegasus_base_dir,
-                    workflow_name='brute_bank'):
+    def create_node(self):
         node = wf.Executable.create_node(self)
 
-        node.add_opt('--output-file', bank_out_file.storage_path)
-
-        node.add_input_opt('--supplement-config-file', config_file)
-
-        node.add_opt('--workflow-name', workflow_name)
-        node.add_opt('--storage-path-base', out_storage_path)
-
-        # Intermediate outputs and dax files
-        node.new_output_file_opt(analysis_time, '.hdf',
-                                 '--intermediate-data-file',
-                                 tags=self.tags + ['INTERMEDIATE'])
-        node.new_output_file_opt(analysis_time, '.xml',
-                                 '--metadata-file',
-                                 tags=self.tags + ['METADATA'])
-        node.new_output_file_opt(analysis_time, '.dax',
-                                 '--dax-file',
-                                 tags=self.tags + ['DAX'])
-        node.new_output_file_opt(analysis_time, '.map',
-                                 '--output-map',
-                                 tags=self.tags + ['MAP'])
         return node
+
+
+def BruteBankExe(workflow, minimal_match, input_bank, out_dir, tag=None):
+
+    "Generate a job of pycbc_brute_bank"
+
+    tags = []
+    if tag is not None:
+        tags.append(tag)
+
+ # Creating the node
+    exe = BruteBankExecutable\
+          (workflow.cp, 'brute_bank', out_dir=out_dir,
+          ifos=workflow.ifos, tags=tags)
+
+    node = exe.create_node()
+    
+ # Adding necessary options
+    node.add_opt('--minimal-match', minimal_match)
+ 
+    if input_bank is not None:
+        node.add_input_opt('--input-file', input_bank)
+
+    node.new_output_file_opt(workflow.analysis_time, '.hdf', '--output-file', tags=tags)
+
+    workflow += node
+
+    return node.output_file
 
 
 ##############################################################################
@@ -97,4 +105,48 @@ args = parser.parse_args()
 
 # Create the workflow object
 workflow = wf.Workflow(args)
+
 wf.makedir(args.output_dir)
+os.chdir(args.output_dir)
+args.output_dir = '.'
+
+##############################################################################
+#   Workflow                                                                 #
+##############################################################################
+
+logging.info("Setting up the pycbc_brute_bank jobs.")
+
+#Defining the list of minimal matches to use for the construction of the coarse banks and the final one
+
+minimal_match = workflow.cp.get('workflow', 'minimal-match')
+
+min_matches = workflow.cp.get('workflow', 'coarse-min-matches')
+min_matches = coarse_matches.split(' ')
+if len(min_matches) == 0:
+    raise ValueError("No minimal match values for the coarse banks are actually provided!")
+
+min_matches.sort()
+if min_matches[-1] > minimal_match:
+    raise ValueError("The values of the minimal match used for the coarse banks cannot be higher than minimal-match")
+
+min_matches.append(minimal_match)
+
+#Checking if an inital seed bank is provided
+seed_file=None
+if workflow.cp.has_option('workflow', 'seed-bank'):
+    # If a seed bank is provided register it as a File object
+    seed_bank = workflow.cp.get_opt('workflow', 'seed-bank')
+    seed_file = wf.File.from_path(seed, store_file=False)
+
+#Setting up the jobs
+seed_tag = 'INI'
+output_banks = {}
+output_banks[seed_tag] = seed_file
+
+for mm in min_matches:
+    bank_tag = 'BANK_MIN_MATCH'+'_'+str(mm)
+    bank = BruteBankExe(workflow, mm, output_banks[seed_tag], args.output_dir, tag=bank_tag) 
+    seed_tag=bank_tag
+    output_banks[bank_tag]=bank
+
+workflow.save()
