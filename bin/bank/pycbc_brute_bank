@@ -69,6 +69,8 @@ parser.add_argument('--tau0-crawl', type=float)
 parser.add_argument('--tau0-start', type=float)
 parser.add_argument('--tau0-end', type=float)
 parser.add_argument('--tau0-cutoff-frequency', type=float, default=15.0)
+parser.add_argument('--eos-file', default=None,
+    help='Mass-lambda file for a given NS equation of state. If this option is given, lambda1 and lambda2 have not to be entered in params')
 pycbc.psd.insert_psd_option_group(parser)
 args = parser.parse_args()
 pycbc.init_logging(args.verbose)
@@ -98,6 +100,10 @@ if args.input_config is not None:
 fdict = {}
 if args.fixed_params:
     fdict = {p: v for (p, v) in zip(args.fixed_params, args.fixed_values)}
+
+#Consistency check
+if all([args.eos_file is not None, 'lambda1' in args.params, 'lambda2' in args.params]):
+    raise Error('If eos-file is given, lambda1 and lambda2 are automatically included in params, there is no need to include them manually')
 
 class Shrinker(object):
     def __init__(self, data):
@@ -336,13 +342,18 @@ if args.input_file:
     params = {k: f[k][:] for k in f}
     bank, _ = bank.check_params(gen, params, args.minimal_match)
 
+#Reading the EOS-file
+if args.eos_file is not None:
+    eos_data = numpy.loadtxt(args.eos_file)
+    mass_from_file = eos_data[:,0]
+    lambda_from_file = eos_data[:,1]
 
 def draw(rtype):
 
     if rtype == 'uniform':
         if args.input_config is None:
             params = {name: numpy.random.uniform(pmin, pmax, size=size)
-                      for name, pmin, pmax in zip(args.params, args.min, args.max)}
+                      for name, pmin, pmax in zip(args.params, args.min, args.max)}  
         else:
             # `draw_samples_from_config` has its own fixed seed, so must overwrite it.
             random_seed = numpy.random.randint(low=0, high=2**32-1)
@@ -352,6 +363,13 @@ def draw(rtype):
             if static_args is not None:
                 for k in static_args.keys():
                     params[k] = numpy.array([static_args[k]]*size)
+
+        if args.eos_file is not None:
+            #inspired by pycbc.conversions.lambda_from_mass_tov_file
+            lambda1_max = numpy.interp(params['mass1'], mass_from_file, lambda_from_file, 0., 0.)
+            lambda2_max = numpy.interp(params['mass2'], mass_from_file, lambda_from_file, 0., 0.)
+            params['lambda1'] = numpy.random.uniform(0., lambda1_max, size=size)
+            params['lambda2'] = numpy.random.uniform(0., lambda2_max, size=size)
 
     elif rtype == 'kde':
         trail = 300
@@ -405,6 +423,13 @@ def draw(rtype):
 
     else:
         l = dists_joint.contains(params)
+    
+    if args.eos_file is not None:
+        l1_max = numpy.interp(params['mass1'], mass_from_file, lambda_from_file, 0., 0.)
+        l2_max = numpy.interp(params['mass2'], mass_from_file, lambda_from_file, 0., 0.)
+        l1 = (params['lambda1'] > 0) & (params['lambda1'] < l1_max)
+        l2 = (params['lambda2'] > 0) & (params['lambda2'] < l2_max)
+        l &= l1 & l2
 
     params = {k: params[k][l] for k in params}
 
