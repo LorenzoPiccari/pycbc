@@ -121,7 +121,7 @@ logging.info("Setting up the pycbc_brute_bank jobs.")
 minimal_match = workflow.cp.get('workflow', 'minimal-match')
 
 min_matches = workflow.cp.get('workflow', 'coarse-min-matches')
-min_matches = coarse_matches.split(' ')
+min_matches = min_matches.split(' ')
 if len(min_matches) == 0:
     raise ValueError("No minimal match values for the coarse banks are actually provided!")
 
@@ -135,8 +135,9 @@ min_matches.append(minimal_match)
 seed_file=None
 if workflow.cp.has_option('workflow', 'seed-bank'):
     # If a seed bank is provided register it as a File object
-    seed_bank = workflow.cp.get_opt('workflow', 'seed-bank')
-    seed_file = wf.File.from_path(seed, store_file=False)
+    seed_bank = workflow.cp.get('workflow', 'seed-bank')
+    #seed_file = wf.File.from_path(seed_bank, store_file=args.output_dir)
+    seed_file = wf.resolve_url_to_file(seed_bank)
 
 #Setting up the jobs
 seed_tag = 'INI'
