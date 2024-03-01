@@ -78,7 +78,7 @@ def set_sim_data(inj, field, data):
     if sim_field in ['spin1', 'spin2']:
         setattr(inj, sim_field, [0, 0, data])
     #if the source mass is given than we want to multiply it by 1+z to store the detector mass 
-    if sim_field in ['mass1_src', 'mass2_src']:
+    elif sim_field in ['mass1_src', 'mass2_src']:
         d = inj.distance
         z = DistanceToRedshift().transform({'distance' : d})
         z = z['redshift']
