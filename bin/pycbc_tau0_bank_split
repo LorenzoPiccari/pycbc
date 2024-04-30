@@ -1,0 +1,79 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2016  Soumi De
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+"""
+The code takes as input a template bank and splits it up into
+smaller banks relative to different tau0 regions
+"""
+
+import argparse
+import numpy as np
+import h5py
+import pycbc, pycbc.version
+from pycbc.waveform import bank
+from pycbc.conversions import tau0_from_mass1_mass2
+
+__author__  = "Lorenzo Piccari"
+
+parser = argparse.ArgumentParser(description=__doc__[1:])
+parser.add_argument("--version", action="version",
+                  version=pycbc.version.git_verbose_msg)
+parser.add_argument("--input-bank", type=str,
+                    help="Input bank file (must be a .hdf).")
+parser.add_argument("--tau0-start", type=float,
+                    help="Lower value for tau0")
+parser.add_argument("--tau0-end", type=float,
+                    help="Upper value for tau0")
+parser.add_argument("--N-tau0-steps", type=int,
+                    help="Number of tau0 steps")
+parser.add_argument("--tau0-low-frequency", type=float,
+                    help="Low frequency cutoff to use to compute tau0")
+parser.add_argument("--outputs", nargs='*', default=None, required=True,
+                    action='store',
+                    help="Outpus banks names")
+args = parser.parse_args()
+
+#Defining tau0 regions:
+N = args.N_tau0_steps
+tau0_start = args.tau0_start
+tau0_end = args.tau0_end
+tau0_step = (tau0_end - tau0_start)/N
+regions = [(tau0_start+i*tau0_step, tau0_start+(i+1)*tau0_step) for i in range(0,N)]
+
+
+#Reading the input bank file
+inp_bank_file = h5py.File(args.input_bank, 'r')
+
+inp_bank = {param : np.array(inp_bank_file[param]) for param in inp_bank_file.keys()}
+
+#Computing tau0 for each template
+f_lower = args.tau0_low_frequency
+bank_size = len(inp_bank['mass1'])
+tau0 = np.array([tau0_from_mass1_mass2(inp_bank['mass1'][i], inp_bank['mass2'][i], f_lower) for i in range(bank_size)])
+
+output_names = args.outputs
+r_idx=0
+for r in regions:
+    tau0_mask = np.where((tau0>r[0]) & (tau0<r[1]), tau0, 0)
+    sub_bank_idx = np.nonzero(tau0_mask)
+    sub_bank = {param : np.take(inp_bank[param], sub_bank_idx).flat[:] for param in inp_bank.keys()}
+    F = h5py.File(output_names[r_idx], 'w')
+    for par in sub_bank:
+        F.create_dataset(par, data=sub_bank[par])
+    F.close()
+    r_idx+=1

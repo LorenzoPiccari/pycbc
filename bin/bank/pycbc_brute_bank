@@ -334,6 +334,9 @@ bank = TriangleBank()
 if args.input_file:
     f = h5py.File(args.input_file, 'r')
     params = {k: f[k][:] for k in f}
+    
+    #if 'approximant' in params:
+    params['approximant'] = f['approximant'].asstr()[...]
     bank, _ = bank.check_params(gen, params, args.minimal_match)
 
 

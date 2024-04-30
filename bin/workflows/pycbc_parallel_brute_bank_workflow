@@ -1,0 +1,242 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2016 Ian W. Harry
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+"""
+Workflow generator for a stochastic template bank construction with pycbc_brute_bank. The parameter space is splitted in tau0-regions, on each an istance of pycbc_brute_bank is applied. Finally all the sub-banks are merged together.
+
+"""
+
+#imports
+import os
+import argparse
+import logging
+import pycbc
+import pycbc.version
+import pycbc.workflow as wf
+from pycbc.workflow.pegasus_workflow import SubWorkflow
+#from pycbc.workflow import setup_splittable_dax_generated
+
+# Boiler-plate stuff
+__author__  = "Lorenzo Piccari <lorenzo.@ligo.org>"
+__version__ = pycbc.version.git_verbose_msg
+__date__    = pycbc.version.date
+__program__ = "pycbc_parallel_brute_bank_workflow"
+
+##################################
+# DEFINE CLASSES AND FUNCTIONS   #
+##################################
+
+class BruteBankExecutable(wf.Executable):
+    """ Class for running pycbc_brute_bank.
+    """
+    # This outputs a dax file.
+    current_retention_level = wf.Executable.FINAL_RESULT
+   
+    # This tells us that --input-file is a file option NOT SURE WHAT THIS IS 
+    file_input_options = wf.Executable.file_input_options + ['--input-file']
+
+    def create_node(self):
+        node = wf.Executable.create_node(self)
+
+        return node
+
+class Tau0BankSplitExecutable(wf.Executable):
+    """ The class responsible for creating jobs for pycbc_tau0_bank_split. 
+    """
+
+    current_retention_level = wf.Executable.FINAL_RESULT
+    
+    def create_node(self, bank):
+        
+        node = wf.Executable.create_node(self)
+        node.add_input_opt('--input-bank', bank)
+        
+        return node
+
+
+class CombineHDFBanksExecutable(wf.Executable):
+    """ Class for running a combination of hdf banks
+    """
+    current_retention_level = wf.Executable.FINAL_RESULT
+
+    def create_node(self, input_bank_files):
+        node = wf.Executable.create_node(self)
+
+        # Input bank files
+        node.add_input_list_opt('--input-filenames', input_bank_files)
+        
+        return node
+
+
+def BruteBankExe(workflow, tau0_start, tau0_end, input_bank, out_dir, tag=None):
+    
+    "Generate a job of pycbc_brute_bank"
+
+    tags = []
+    if tag is not None:
+        tags.append(tag)
+
+ # Creating the node
+    exe = BruteBankExecutable\
+          (workflow.cp, 'brute_bank', out_dir=out_dir,\
+          ifos=workflow.ifos, tags=tags)
+
+    node = exe.create_node()
+    
+ # Adding necessary options
+    node.add_opt('--tau0-start', tau0_start)
+    node.add_opt('--tau0-end', tau0_end)
+ 
+    if input_bank is not None:
+        node.add_input_opt('--input-file', input_bank)
+
+    node.new_output_file_opt(workflow.analysis_time, '.hdf', '--output-file')
+
+    workflow += node
+
+    return node.output_file
+
+
+def Tau0BankSplitExe(workflow, input_brute_bank, num_banks, out_dir, tag=None):
+
+    "Generate a job of pycbc_tau0_bank_split"
+
+    tags = []
+    if tag is not None:
+        tags.append(tag)
+
+    #Creating the node
+    exe = Tau0BankSplitExecutable(workflow.cp, 'tau0_split_bank', out_dir=out_dir,\
+          ifos=workflow.ifos, tags=tags)
+
+    node = exe.create_node(input_brute_bank)
+    
+    #Adding necessary input options
+    node.add_opt('--N-tau0-steps', num_banks)
+    
+    out_files = wf.FileList([])
+    for i in range( 0, num_banks):
+        bank_tag = "Tau0_SPLIT_"+str(i)
+        out_file = wf.File(workflow.ifos, bank_tag, workflow.analysis_time,\
+                        extension=".hdf5", directory=out_dir, tags=tags)
+        out_files.append(out_file)
+    node.add_output_list_opt('--outputs', out_files)
+
+    workflow += node
+
+    return node.output_files
+
+def HDFBanksCombineExe(workflow, input_bank_files, out_dir, tag=None):
+    
+    "Generate a job of sbank_hdf5_bankcombiner"
+
+    tags = [] 
+    if tag is not None:
+        tags.append(tag)
+    
+    # Creating the node
+    exe = CombineHDFBanksExecutable(workflow.cp, 'hdf_combine_banks', out_dir=out_dir,\
+          ifos=workflow.ifos, tags=tags)
+
+    node = exe.create_node(input_bank_files)
+    
+    # Adding the Output file
+    node.new_output_file_opt(workflow.analysis_time, '.hdf', '--output-file', tags=tags)
+
+    workflow += node
+
+    return node.output_file
+
+
+# Function to generate the boundaries of the tau0 regions
+def tau0_regions(tau0_ini, tau0_fin, N):
+    tau0_step = (tau0_fin - tau0_ini)/N
+    regions = [(tau0_ini+i*tau0_step, tau0_ini+(i+1)*tau0_step) for i in range(0,N)]
+    return regions
+
+##############################################################################
+# Argument parsing and setup of workflow                                     #
+##############################################################################
+
+
+# Use the standard workflow command-line parsing routines. Things like a
+# configuration file are specified within the "workflow command line group"
+# so run this with --help to see what options are added.
+_desc = __doc__[1:]
+parser = argparse.ArgumentParser(description=_desc)
+parser.add_argument('--version', action='version', version=__version__)
+parser.add_argument("--output-file", type=str, default=None,
+                    help="Specify the output file name. Either a name can be "
+                         "provided or a full path to file. Is this is not "
+                         "given a filename and location is chosen ")
+
+
+wf.add_workflow_command_line_group(parser)
+wf.add_workflow_settings_cli(parser, include_subdax_opts=True)
+args = parser.parse_args()
+
+# Create the workflow object
+workflow = wf.Workflow(args)
+
+wf.makedir(args.output_dir)
+os.chdir(args.output_dir)
+args.output_dir = '.'
+
+##############################################################################
+#   Workflow                                                                 #
+##############################################################################
+
+logging.info("Setting up the pycbc_brute_bank jobs.")
+
+tau0_ini = float(workflow.cp.get('workflow', 'tau0_ini'))
+tau0_fin = float(workflow.cp.get('workflow', 'tau0_fin'))
+N_regions = int(workflow.cp.get('workflow', 'N_tau0_regions'))
+
+tau0_regns = tau0_regions(tau0_ini, tau0_fin, N_regions)
+
+#Checking if an inital seed bank is provided
+seed_split_banks=wf.FileList([])
+seed_bool = False
+if workflow.cp.has_option('workflow', 'seed-bank'):
+    seed_bool = True
+    # If a seed bank is provided register it as a File object
+    seed_bank = workflow.cp.get('workflow', 'seed-bank')
+    seed_file = wf.resolve_url_to_file(seed_bank)
+
+    #Splitting the seed bank in according to the different tau0_regions
+    seed_job = Tau0BankSplitExe(workflow, seed_file, N_regions, args.output_dir)
+    for f in seed_job:
+        seed_split_banks.append(f)
+
+#Parallelized pycbc_brute_bank jobs
+brute_bank_files = wf.FileList([])
+bank_idx = 0
+for reg in tau0_regns:
+    bank_tag = '_{0}_REG_{1:.2f}_{2:.2f}'.format(bank_idx+1, reg[0], reg[1])
+    if seed_bool:
+        bank = BruteBankExe(workflow, reg[0], reg[1], seed_split_banks[bank_idx], args.output_dir, tag=bank_tag)
+    else:
+        bank = BruteBankExe(workflow, reg[0], reg[1], args.output_dir, tag=bank_tag)
+    brute_bank_files.append(bank)    
+    bank_idx += 1
+
+#Final bank:
+combine_tag = 'FINAL'
+combiner_node = HDFBanksCombineExe(workflow, brute_bank_files, args.output_dir, tag=combine_tag)
+
+workflow.save()

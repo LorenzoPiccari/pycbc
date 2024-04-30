@@ -1,0 +1,10 @@
+#!/usr/bin/env python
+
+import h5py
+import numpy
+import argparse
+from pycbc.waveform import get_td_waveform, get_fd_waveform, td_approximants, fd_approximants
+
+#QUESTO SCRIPT DEVE PRENDERE DUE BANCHE IN HDF E COMBINARLE CALCOLANDO IL MATCH
+
+#PROBABILMENTE CONVIENE PRENDERE LARGAMENTE SPUNTO PYCBC_BANKSIM
